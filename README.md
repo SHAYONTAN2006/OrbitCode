@@ -1,8 +1,8 @@
-# Bad Code
+# OrbitCode
 
-`bad-code` is a small prototype for a browser-based coding workspace. It contains a React frontend and a Node.js/TypeScript backend that creates per-project workspaces, synchronizes files with S3-compatible storage, and exposes a shell terminal.
+OrbitCode is a browser-based coding workspace. It contains a React frontend and a Node.js/TypeScript backend that creates per-project workspaces, synchronizes files with S3-compatible storage, and exposes a shell terminal.
 
-This folder is intentionally an example of an early, rough implementation. It is useful for understanding the original architecture and for comparing it with `good-code`; it is not production-ready.
+This implementation provides the core OrbitCode workflow: create a project from a language template, browse and edit its files, persist changes, and work in an interactive terminal.
 
 ## Architecture
 
@@ -133,6 +133,3 @@ npm run build
 - The S3 copy operation is intended to support continuation tokens, but the recursive call currently passes the original token.
 - The implementation assumes a single backend process and local temporary storage.
 
-## Relationship to `good-code`
-
-`good-code` contains the refactored layout for the same general idea. Its frontend is separate, while backend responsibilities are split into `init-service`, `orchestrator-simple`, and `runner`, with Kubernetes ingress configuration under `k8s/`.
