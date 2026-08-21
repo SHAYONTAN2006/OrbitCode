@@ -1,12 +1,10 @@
-/** Import necessary libraries */
 import axios from 'axios';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from '@emotion/styled';
+import { ORCHESTRATOR_URL } from '../config';
 
-/** Constants */
 const SLUG_WORKS = ["car", "dog", "computer", "person", "inside", "word", "for", "please", "to", "cool", "open", "source"];
-const SERVICE_URL = "http://localhost:3001";
 
 /** Styled components */
 const Container = styled.div`
@@ -81,9 +79,20 @@ export const Landing = () => {
         </StyledSelect>
         <StyledButton disabled={loading} onClick={async () => {
           setLoading(true);
-          await axios.post(`${SERVICE_URL}/project`, { replId, language });
-          setLoading(false);
-          navigate(`/coding/?replId=${replId}`)
+          try {
+          const response = await axios.post(`${ORCHESTRATOR_URL}/project`, { replId, language });
+            const taskInfo = response.data.taskInfo;
+            console.log("Task Info from Orchestrator:", taskInfo);
+            // In a full production setup with AWS ALB, taskInfo would be the URL to connect to.
+            // For now, we pass the replId and assume the CodingPage knows where to route,
+            // or pass the IP dynamically if your aws.ts returned it.
+            setLoading(false);
+            navigate(`/coding/?replId=${replId}&taskInfo=${encodeURIComponent(JSON.stringify(taskInfo))}`);
+          } catch (error) {
+            console.error(error);
+            setLoading(false);
+            alert("Failed to start project.");
+          }
         }}>{loading ? "Starting ..." : "Start Coding"}</StyledButton>
       </Container>
     );

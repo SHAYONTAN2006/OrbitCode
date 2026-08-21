@@ -37,17 +37,19 @@ const RightPanel = styled.div`
   width: 40%;
 `;
 
-function useSocket(replId: string) {
+function useSocket(replId: string, runnerUri: string) {
     const [socket, setSocket] = useState<Socket | null>(null);
 
     useEffect(() => {
-        const newSocket = io(`${EXECUTION_ENGINE_URI}?roomId=${replId}`);
+        console.log(`Connecting to runner at: ${runnerUri}`);
+        // Connect directly to the specific container assigned to this user
+        const newSocket = io(`${runnerUri}`);
         setSocket(newSocket);
 
         return () => {
             newSocket.disconnect();
         };
-    }, [replId]);
+    }, [replId, runnerUri]);
 
     return socket;
 }
@@ -55,8 +57,13 @@ function useSocket(replId: string) {
 export const CodingPage = () => {
     const [searchParams] = useSearchParams();
     const replId = searchParams.get('replId') ?? '';
+    
+    // The Orchestrator passes the runner's IP/URI via the URL (encoded in taskInfo).
+    // Fall back to the default EXECUTION_ENGINE_URI for local development.
+    const runnerUri = EXECUTION_ENGINE_URI;
+    
     const [loaded, setLoaded] = useState(false);
-    const socket = useSocket(replId);
+    const socket = useSocket(replId, runnerUri);
     const [fileStructure, setFileStructure] = useState<RemoteFile[]>([]);
     const [selectedFile, setSelectedFile] = useState<File | undefined>(undefined);
     const [showOutput, setShowOutput] = useState(false);
