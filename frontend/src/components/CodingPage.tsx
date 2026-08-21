@@ -39,11 +39,16 @@ const RightPanel = styled.div`
 
 function useSocket(replId: string, runnerUri: string) {
     const [socket, setSocket] = useState<Socket | null>(null);
+    const [connectionError, setConnectionError] = useState<string | null>(null);
 
     useEffect(() => {
         console.log(`Connecting to runner at: ${runnerUri}`);
+        setConnectionError(null);
         // Connect directly to the specific container assigned to this user
         const newSocket = io(`${runnerUri}`);
+        newSocket.on('connect_error', () => {
+            setConnectionError(`Unable to connect to runner at ${runnerUri}`);
+        });
         setSocket(newSocket);
 
         return () => {
@@ -51,28 +56,41 @@ function useSocket(replId: string, runnerUri: string) {
         };
     }, [replId, runnerUri]);
 
-    return socket;
+    return { socket, connectionError };
 }
 
 export const CodingPage = () => {
     const [searchParams] = useSearchParams();
     const replId = searchParams.get('replId') ?? '';
     
-    // The Orchestrator passes the runner's IP/URI via the URL (encoded in taskInfo).
-    // Fall back to the default EXECUTION_ENGINE_URI for local development.
-    const runnerUri = EXECUTION_ENGINE_URI;
+    const taskInfo = searchParams.get('taskInfo');
+    let runnerUri = EXECUTION_ENGINE_URI;
+
+    if (taskInfo) {
+        try {
+            const parsedTaskInfo: unknown = JSON.parse(taskInfo);
+            if (typeof parsedTaskInfo === 'string') {
+                runnerUri = parsedTaskInfo;
+            }
+        } catch {
+            console.error('Invalid runner task information in URL');
+        }
+    }
     
     const [loaded, setLoaded] = useState(false);
-    const socket = useSocket(replId, runnerUri);
+    const { socket, connectionError } = useSocket(replId, runnerUri);
     const [fileStructure, setFileStructure] = useState<RemoteFile[]>([]);
     const [selectedFile, setSelectedFile] = useState<File | undefined>(undefined);
-    const [showOutput, setShowOutput] = useState(false);
+    const [output, setOutput] = useState("");
 
     useEffect(() => {
         if (socket) {
             socket.on('loaded', ({ rootContent }: { rootContent: RemoteFile[]}) => {
                 setLoaded(true);
                 setFileStructure(rootContent);
+            });
+            socket.on('runOutput', ({ output: runOutput }: { output: string }) => {
+                setOutput(runOutput);
             });
         }
     }, [socket]);
@@ -97,20 +115,25 @@ export const CodingPage = () => {
     };
     
     if (!loaded) {
-        return "Loading...";
+        return connectionError || "Loading...";
     }
 
     return (
         <Container>
              <ButtonContainer>
-                <button onClick={() => setShowOutput(!showOutput)}>See output</button>
+                <button disabled={!selectedFile} onClick={() => {
+                    if (selectedFile) {
+                        setOutput("Running...");
+                        socket?.emit("run", { path: selectedFile.path });
+                    }
+                }}>Run</button>
             </ButtonContainer>
             <Workspace>
                 <LeftPanel>
                     <Editor socket={socket} selectedFile={selectedFile} onSelect={onSelect} files={fileStructure} />
                 </LeftPanel>
                 <RightPanel>
-                    {showOutput && <Output />}
+                    {output && <Output output={output} />}
                     <Terminal socket={socket} />
                 </RightPanel>
             </Workspace>

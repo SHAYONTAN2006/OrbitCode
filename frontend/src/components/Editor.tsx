@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import Sidebar from "./external/editor/components/sidebar";
 import { Code } from "./external/editor/editor/code";
 import styled from "@emotion/styled";
@@ -23,10 +23,12 @@ export const Editor = ({
   }, [files]);
 
   useEffect(() => {
-    if (!selectedFile) {
-      onSelect(rootDir.files[0])
+    if (!selectedFile && rootDir.files.length > 0) {
+      const firstFile = rootDir.files[0];
+      const selectionTimeout = window.setTimeout(() => onSelect(firstFile), 0);
+      return () => window.clearTimeout(selectionTimeout);
     }
-  }, [selectedFile])
+  }, [selectedFile, rootDir, onSelect])
 
   return (
     <div>

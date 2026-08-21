@@ -1,5 +1,5 @@
 import React, {ReactNode} from 'react'
-import {SiHtml5, SiCss3, SiJavascript, SiTypescript, SiJson} from "react-icons/si";
+import {SiHtml5, SiCss, SiJavascript, SiTypescript, SiJson} from "react-icons/si";
 import {FcFolder, FcOpenedFolder, FcPicture, FcFile} from "react-icons/fc";
 import {AiFillFileText} from "react-icons/ai";
 
@@ -9,7 +9,7 @@ function getIconHelper() {
   cache.set("jsx", <SiJavascript color="#fbcb38"/>);
   cache.set("ts", <SiTypescript color="#378baa"/>);
   cache.set("tsx", <SiTypescript color="#378baa"/>);
-  cache.set("css", <SiCss3 color="purple"/>);
+  cache.set("css", <SiCss color="purple"/>);
   cache.set("json", <SiJson color="#5656e6"/>);
   cache.set("html", <SiHtml5 color="#e04e2c"/>);
   cache.set("png", <FcPicture/>);

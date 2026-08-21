@@ -34,8 +34,12 @@ export interface Directory extends CommonProps {
  * @param data fetch获取的结果
  */
 export function buildFileTree(data: RemoteFile[]): Directory {
-  const dirs = data.filter(x => x.type === "dir");
-  const files = data.filter(x => x.type === "file");
+  const normalizedData = data.map(item => ({
+    ...item,
+    path: item.path.replace(/^\/+/, "")
+  }));
+  const dirs = normalizedData.filter(x => x.type === "dir");
+  const files = normalizedData.filter(x => x.type === "file");
   const cache = new Map<string, Directory | File>(); // 缓存
   // 待构建的根目录
   let rootDir: Directory = {
@@ -54,7 +58,7 @@ export function buildFileTree(data: RemoteFile[]): Directory {
       id: item.path,
       name: item.name,
       path: item.path,
-      parentId: item.path.split("/").length === 2 ? "0" : dirs.find(x => x.path === item.path.split("/").slice(0, -1).join("/"))?.path,
+      parentId: item.path.includes("/") ? dirs.find(x => x.path === item.path.split("/").slice(0, -1).join("/"))?.path : "0",
       type: Type.DIRECTORY,
       depth: 0,
       dirs: [],
@@ -69,7 +73,7 @@ export function buildFileTree(data: RemoteFile[]): Directory {
       id: item.path,
       name: item.name,
       path: item.path,
-      parentId: item.path.split("/").length === 2 ? "0" : dirs.find(x => x.path === item.path.split("/").slice(0, -1).join("/"))?.path,
+      parentId: item.path.includes("/") ? dirs.find(x => x.path === item.path.split("/").slice(0, -1).join("/"))?.path : "0",
       type: Type.FILE,
       depth: 0
     };

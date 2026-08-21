@@ -4,6 +4,7 @@ import { saveToS3 } from "./aws";
 import path from "path";
 import { fetchDir, fetchFileContent, saveFile } from "./fs";
 import { TerminalManager } from "./pty";
+import { execFile } from "child_process";
 
 const terminalManager = new TerminalManager();
 const replId = process.env.REPL_ID;
@@ -41,11 +42,10 @@ export function initWs(httpServer: HttpServer) {
         // Reset timeout on new connection
         if (idleTimeout) clearTimeout(idleTimeout);
 
+        initHandlers(socket, replId);
         socket.emit("loaded", {
             rootContent: await fetchDir(path.join(__dirname, `../workspace`), "")
         });
-
-        initHandlers(socket, replId);
     });
 }
 
@@ -84,5 +84,23 @@ function initHandlers(socket: Socket, replId: string) {
     
     socket.on("terminalData", async ({ data }: { data: string, terminalId: number }) => {
         terminalManager.write(socket.id, data);
+    });
+
+    socket.on("run", ({ path: filePath }: { path: string }) => {
+        const extension = path.extname(filePath);
+        const command = extension === ".py" ? "python3" : "node";
+        const workspacePath = path.join(__dirname, "../workspace");
+        const relativePath = filePath.replace(/^\/+/, "");
+        const resolvedPath = path.resolve(workspacePath, relativePath);
+
+        if (!resolvedPath.startsWith(`${workspacePath}${path.sep}`)) {
+            socket.emit("runOutput", { output: "Invalid file path" });
+            return;
+        }
+
+        execFile(command, [relativePath], { cwd: workspacePath, timeout: 30000 }, (error, stdout, stderr) => {
+            const output = `${stdout}${stderr}` || (error?.message ?? "Process finished with no output");
+            socket.emit("runOutput", { output });
+        });
     });
 }

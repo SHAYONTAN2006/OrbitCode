@@ -11,6 +11,10 @@ const app = express();
 app.use(cors());
 const httpServer = createServer(app);
 
+app.get("/", (req: express.Request, res: express.Response) => {
+    res.send("Runner is online");
+});
+
 const replId = process.env.REPL_ID;
 
 // Basic health check endpoint for ECS

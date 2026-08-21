@@ -22,7 +22,8 @@ app.post("/project", async (req, res) => {
         console.log(`Creating project for replId: ${replId} with language: ${language}`);
         
         // 1. Copy base code for the selected language to the user's S3 code folder
-        await copyS3Folder(`base/${language}`, `code/${replId}`);
+        const baseLanguage = language === "node-js" ? "node.js" : language;
+        await copyS3Folder(`base/${baseLanguage}`, `code/${replId}`);
         console.log("Base code copied to S3 successfully.");
 
         // 2. Spin up a new ECS Fargate container to act as the runner

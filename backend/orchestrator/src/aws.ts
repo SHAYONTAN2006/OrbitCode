@@ -1,4 +1,5 @@
 import { S3 } from "aws-sdk";
+import { EC2 } from "aws-sdk";
 import { ECSClient, RunTaskCommand, DescribeTasksCommand } from "@aws-sdk/client-ecs";
 
 const s3 = new S3({
@@ -15,6 +16,14 @@ const ecsClient = new ECSClient({
     }
 });
 
+const ec2 = new EC2({
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    region: process.env.AWS_REGION || "us-east-1"
+});
+
+const runnerContainerName = process.env.ECS_CONTAINER_NAME || "Main";
+
 export async function copyS3Folder(sourcePrefix: string, destinationPrefix: string, continuationToken?: string): Promise<void> {
     try {
         const listParams = {
@@ -25,7 +34,12 @@ export async function copyS3Folder(sourcePrefix: string, destinationPrefix: stri
 
         const listedObjects = await s3.listObjectsV2(listParams).promise();
 
-        if (!listedObjects.Contents || listedObjects.Contents.length === 0) return;
+        if (!listedObjects.Contents || listedObjects.Contents.length === 0) {
+            if (!continuationToken) {
+                throw new Error(`No S3 base files found for prefix: ${sourcePrefix}`);
+            }
+            return;
+        }
         
         await Promise.all(listedObjects.Contents.map(async (object) => {
             if (!object.Key) return;
@@ -67,7 +81,7 @@ export async function startRunnerContainer(replId: string): Promise<string> {
             overrides: {
                 containerOverrides: [
                     {
-                        name: "runner", // The name of the container in the Task Definition
+                        name: runnerContainerName,
                         environment: [
                             { name: "REPL_ID", value: replId },
                             { name: "S3_BUCKET", value: process.env.S3_BUCKET || "" },
@@ -111,26 +125,30 @@ async function waitForTaskIp(taskArn: string): Promise<string> {
         const task = describeResponse.tasks?.[0];
 
         if (task?.lastStatus === "RUNNING") {
-            // Find the Elastic Network Interface (ENI) to get the public IP
             const eniAttachment = task.attachments?.find(a => a.type === "ElasticNetworkInterface");
             const publicIpDetail = eniAttachment?.details?.find(d => d.name === "networkInterfaceId");
-            
-            // Note: Describing the ENI to get the actual public IP requires EC2 permissions. 
-            // For a simpler approach if the frontend connects via a domain name, you might 
-            // map this task to a target group, or query the ENI directly using the EC2 client.
-            // For this boilerplate, we'll assume you resolve the ENI to an IP separately 
-            // or route through an internal service discovery.
-            // But if you need the direct IP, you must query EC2:
-            // ec2Client.describeNetworkInterfaces({ NetworkInterfaceIds: [publicIpDetail.value] })
-            
-            // As a placeholder, returning a success message indicating the task is running.
-            // In a full production app, you'd use AWS Cloud Map or an ALB for routing.
-            return "Task is RUNNING. (Implement ENI IP lookup or use ALB for direct routing)"; 
+
+            if (!publicIpDetail?.value) {
+                throw new Error("Runner task is RUNNING but has no network interface yet");
+            }
+
+            const networkInterfaces = await ec2.describeNetworkInterfaces({
+                NetworkInterfaceIds: [publicIpDetail.value]
+            }).promise();
+            const publicIp = networkInterfaces.NetworkInterfaces?.[0]?.Association?.PublicIp;
+
+            if (!publicIp) {
+                throw new Error("Runner task is RUNNING but has no public IP");
+            }
+
+            return `http://${publicIp}:${process.env.RUNNER_PORT || "8080"}`;
         }
 
         if (task?.lastStatus === "STOPPED") {
             throw new Error(`Task stopped unexpectedly. Reason: ${task.stoppedReason}`);
         }
+
+        console.log(`Runner task status: ${task?.lastStatus || "NOT_FOUND"}`);
 
         // Wait before polling again
         await new Promise(resolve => setTimeout(resolve, delayMs));
