@@ -14,7 +14,7 @@ const httpServer = createServer(app);
 const replId = process.env.REPL_ID;
 
 // Basic health check endpoint for ECS
-app.get("/health", (req, res) => {
+app.get("/health", (req: express.Request, res: express.Response) => {
     res.send("OK");
 });
 

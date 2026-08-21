@@ -1,4 +1,5 @@
-import { fork, IPty } from 'node-pty';
+import * as pty from 'node-pty';
+import { IPty } from 'node-pty';
 import path from "path";
 
 const SHELL = "bash";
@@ -11,7 +12,7 @@ export class TerminalManager {
     }
     
     createPty(id: string, replId: string, onData: (data: string, id: number) => void) {
-        let term = fork(SHELL, [], {
+        let term = pty.spawn(SHELL, [], {
             cols: 100,
             name: 'xterm',
             cwd: path.join(__dirname, `../workspace`) // Changed to a generic workspace folder for the runner
