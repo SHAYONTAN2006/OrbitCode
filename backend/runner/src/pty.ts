@@ -18,12 +18,12 @@ export class TerminalManager {
             cwd: path.join(__dirname, `../workspace`) // Changed to a generic workspace folder for the runner
         });
     
-        term.on('data', (data: string) => onData(data, term.pid));
+        term.onData((data: string) => onData(data, term.pid));
         this.sessions[id] = {
             terminal: term,
             replId
         };
-        term.on('exit', () => {
+        term.onExit(() => {
             delete this.sessions[term.pid];
         });
         return term;
