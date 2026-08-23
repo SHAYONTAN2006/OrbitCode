@@ -5,6 +5,8 @@ import express from "express";
 import cors from "cors";
 import { copyS3Folder, startRunnerContainer } from "./aws";
 
+const runners = new Map<string, string>();
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -28,18 +30,34 @@ app.post("/project", async (req, res) => {
 
         // 2. Spin up a new ECS Fargate container to act as the runner
         const runnerTaskInfo = await startRunnerContainer(replId);
+        runners.set(replId, runnerTaskInfo);
+        console.log(`[Orchestrator] Runner registered: ${replId} -> ${runnerTaskInfo}`);
 
         // 3. Return success and the task information to the frontend
         res.json({
             message: "Project created and Runner started successfully",
             replId: replId,
-            taskInfo: runnerTaskInfo
+            taskInfo: { replId }
         });
 
     } catch (error) {
         console.error("Error creating project:", error);
         res.status(500).send("Internal Server Error");
     }
+});
+
+app.get("/internal/runners/:replId", (req, res) => {
+    const runnerUrl = runners.get(req.params.replId);
+    if (!runnerUrl) {
+        res.status(404).json({ error: "Runner not found" });
+        return;
+    }
+    res.json({ replId: req.params.replId, runnerUrl });
+});
+
+app.delete("/internal/runners/:replId", (req, res) => {
+    runners.delete(req.params.replId);
+    res.status(204).send();
 });
 
 const port = process.env.PORT || 3000;

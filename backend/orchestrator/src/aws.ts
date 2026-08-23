@@ -66,6 +66,12 @@ export async function copyS3Folder(sourcePrefix: string, destinationPrefix: stri
 
 export async function startRunnerContainer(replId: string): Promise<string> {
     try {
+        const localRunnerUrl = process.env.LOCAL_RUNNER_URL;
+        if (localRunnerUrl) {
+            console.log(`[Orchestrator] Using local runner: ${localRunnerUrl}`);
+            return localRunnerUrl;
+        }
+
         // 1. Run the ECS Task
         const runCommand = new RunTaskCommand({
             cluster: process.env.ECS_CLUSTER_NAME,

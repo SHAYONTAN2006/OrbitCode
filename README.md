@@ -16,17 +16,21 @@ Orchestrator (Express, port 3000)
   | S3 copy          | ECS RunTask
   v                  v
 S3 bucket       ECS Fargate runner
+                     ^
+                     | private runner connection
                      |
-                     | Socket.IO, HTTP, port 8080
-                     v
-              file tree, editor, terminal, run output
+Execution Gateway (port 4000)
+                     ^
+                     | Socket.IO
+                     |
+                   Browser
 ```
 
 ### Frontend
 
 - `frontend/src/App.tsx` provides `/` (landing page) and `/coding?replId=<id>` (workspace page).
 - The landing page sends `POST http://localhost:3000/project` with `{ replId, language }`.
-- The coding page reads the runner URL returned as `taskInfo` and connects to it with Socket.IO.
+- The coding page connects only to the stable execution gateway and sends `replId` as Socket.IO query metadata.
 - The editor loads the S3-backed file tree, fetches file contents, and uploads complete file changes.
 - The terminal uses xterm in the browser and forwards input/output through Socket.IO.
 - The Run button asks the runner to execute the selected `.js` or `.py` file and displays stdout/stderr.
@@ -34,7 +38,8 @@ S3 bucket       ECS Fargate runner
 ### Backend
 
 - `backend/orchestrator/src/index.ts` loads `.env`, handles `POST /project`, copies the template, and starts an ECS Fargate task.
-- `backend/orchestrator/src/aws.ts` copies S3 templates, polls ECS, resolves the runner ENI public IP, and returns its port-8080 URL.
+- `backend/orchestrator/src/aws.ts` copies S3 templates and starts an ECS runner, or registers `LOCAL_RUNNER_URL` for local testing.
+- `execution-gateway/src/gateway.ts` resolves a repl through the orchestrator registry and proxies existing Socket.IO events to the runner.
 - `backend/runner/src/index.ts` downloads `code/<replId>` into `/app/workspace` and starts the runner HTTP/Socket.IO server on port `8080`.
 - `backend/runner/src/ws.ts` handles file, terminal, and run events.
 - `backend/runner/src/pty.ts` starts a Bash PTY in the workspace.
@@ -46,11 +51,12 @@ S3 bucket       ECS Fargate runner
 2. The frontend calls `POST /project` on the orchestrator.
 3. The orchestrator maps `node-js` to the S3 prefix `base/node.js` and copies it to `code/<replId>`.
 4. The orchestrator starts the ECS task using `ECS_TASK_DEFINITION_ARN` and waits for `RUNNING`.
-5. The orchestrator resolves the task public IP and returns `http://<public-ip>:8080` as `taskInfo`.
-6. The browser connects to the runner with Socket.IO.
-7. The runner downloads `code/<replId>` and emits the initial file tree.
-8. File reads, edits, terminal traffic, and run output use Socket.IO events.
-9. Editor changes are written to the runner workspace and uploaded to S3.
+5. The orchestrator registers the runner URL internally and returns only the `replId`.
+6. The browser connects to the stable execution gateway with `replId` as a query parameter.
+7. The gateway resolves the runner and opens a server-side Socket.IO connection.
+8. The runner downloads `code/<replId>` and emits the initial file tree.
+9. File reads, edits, terminal traffic, and run output are proxied without changing event names.
+10. Editor changes are written to the runner workspace and uploaded to S3.
 
 ## Prerequisites
 
@@ -60,6 +66,7 @@ S3 bucket       ECS Fargate runner
 - AWS credentials with S3 and ECS permissions for local orchestrator use
 - An ECR repository containing the runner image
 - An ECS cluster, active task definition, subnets, and a security group allowing TCP `8080`
+- A local execution gateway on port `4000` for development
 
 ## Configuration
 
@@ -83,7 +90,7 @@ PORT=3000
 The frontend uses Vite environment variables in `frontend/.env`:
 
 - `VITE_ORCHESTRATOR_URL=http://localhost:3000`
-- `VITE_EXECUTION_ENGINE_URI=ws://localhost:8080` for local fallback only; ECS sessions use the returned runner URL.
+- `VITE_EXECUTION_GATEWAY_URL=http://localhost:4000`
 
 Do not commit AWS credentials. If credentials have ever been pushed, revoke and replace them, remove them from Git history, and use the replacement credentials locally or through an IAM role.
 
@@ -96,6 +103,32 @@ cd backend/orchestrator
 npm install
 npm run dev
 ```
+
+Install and start the execution gateway in a third terminal:
+
+```bash
+cd execution-gateway
+npm install
+npm run dev
+```
+
+For local integration testing, start a runner in a fourth terminal:
+
+```bash
+cd backend/runner
+npm install
+$env:REPL_ID="local-repl"
+$env:PORT="5001"
+npm run dev
+```
+
+Set this in `backend/orchestrator/.env`:
+
+```env
+LOCAL_RUNNER_URL=http://localhost:5001
+```
+
+Enter `local-repl` in the landing page before starting the project. The local runner still needs valid S3 settings to download `code/local-repl`.
 
 In another terminal, install and start the frontend:
 
@@ -146,6 +179,12 @@ npm run build
 | client -> server | `run` | Executes the selected JavaScript or Python file |
 | server -> client | `runOutput` | Sends process stdout/stderr to the output panel |
 
+## Execution Gateway
+
+The gateway is the only Socket.IO endpoint used by the browser. It accepts `replId` in the connection query, asks the orchestrator for the matching runner URL, and forwards the existing file, terminal, and execution events. Runner addresses never appear in the frontend configuration or project response.
+
+The local registry is an in-memory map owned by the orchestrator. The gateway accesses it through the orchestrator's internal HTTP endpoint. In AWS, replace this endpoint or its backing store with Redis, DynamoDB, or ECS service discovery without changing the browser protocol.
+
 ## Known limitations
 
 - There is no authentication or authorization; the Socket.IO origin is `*`.
@@ -155,7 +194,8 @@ npm run build
 - PTY and file execution run inside the ECS container but should still not be exposed to untrusted users without authentication and resource limits.
 - User workspace dependencies are not installed automatically; the Run handler executes JavaScript with Node or Python files with Python 3.
 - The runner currently exposes port `8080` for Socket.IO and runner HTTP health checks. A separate application preview port and ECS/network mapping are required for web previews.
-- The orchestrator returns a task public IP. A load balancer or service discovery is recommended for production deployments.
+- The gateway currently resolves runner URLs through the orchestrator's in-memory registry; use a shared durable registry when running multiple orchestrator instances.
+- The current ECS implementation still obtains a public runner IP. Production should place runners privately behind the gateway or service discovery.
 - ECS tasks shut down after five minutes without an active socket connection.
 - The S3 copy operation is intended to support continuation tokens, but the recursive call currently passes the original token.
 

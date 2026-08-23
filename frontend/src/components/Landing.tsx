@@ -81,13 +81,8 @@ export const Landing = () => {
           setLoading(true);
           try {
           const response = await axios.post(`${ORCHESTRATOR_URL}/project`, { replId, language });
-            const taskInfo = response.data.taskInfo;
-            console.log("Task Info from Orchestrator:", taskInfo);
-            // In a full production setup with AWS ALB, taskInfo would be the URL to connect to.
-            // For now, we pass the replId and assume the CodingPage knows where to route,
-            // or pass the IP dynamically if your aws.ts returned it.
             setLoading(false);
-            navigate(`/coding/?replId=${replId}&taskInfo=${encodeURIComponent(JSON.stringify(taskInfo))}`);
+            navigate(`/coding/?replId=${encodeURIComponent(response.data.replId || replId)}`);
           } catch (error) {
             console.error(error);
             setLoading(false);

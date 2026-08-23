@@ -76,6 +76,11 @@ function startRunnerContainer(replId) {
     return __awaiter(this, void 0, void 0, function* () {
         var _a, _b, _c, _d;
         try {
+            const localRunnerUrl = process.env.LOCAL_RUNNER_URL;
+            if (localRunnerUrl) {
+                console.log(`[Orchestrator] Using local runner: ${localRunnerUrl}`);
+                return localRunnerUrl;
+            }
             // 1. Run the ECS Task
             const runCommand = new client_ecs_1.RunTaskCommand({
                 cluster: process.env.ECS_CLUSTER_NAME,

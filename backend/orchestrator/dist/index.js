@@ -17,6 +17,7 @@ dotenv_1.default.config();
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const aws_1 = require("./aws");
+const runners = new Map();
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
@@ -35,11 +36,13 @@ app.post("/project", (req, res) => __awaiter(void 0, void 0, void 0, function* (
         console.log("Base code copied to S3 successfully.");
         // 2. Spin up a new ECS Fargate container to act as the runner
         const runnerTaskInfo = yield (0, aws_1.startRunnerContainer)(replId);
+        runners.set(replId, runnerTaskInfo);
+        console.log(`[Orchestrator] Runner registered: ${replId} -> ${runnerTaskInfo}`);
         // 3. Return success and the task information to the frontend
         res.json({
             message: "Project created and Runner started successfully",
             replId: replId,
-            taskInfo: runnerTaskInfo
+            taskInfo: { replId }
         });
     }
     catch (error) {
@@ -47,6 +50,18 @@ app.post("/project", (req, res) => __awaiter(void 0, void 0, void 0, function* (
         res.status(500).send("Internal Server Error");
     }
 }));
+app.get("/internal/runners/:replId", (req, res) => {
+    const runnerUrl = runners.get(req.params.replId);
+    if (!runnerUrl) {
+        res.status(404).json({ error: "Runner not found" });
+        return;
+    }
+    res.json({ replId: req.params.replId, runnerUrl });
+});
+app.delete("/internal/runners/:replId", (req, res) => {
+    runners.delete(req.params.replId);
+    res.status(204).send();
+});
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
     console.log(`Orchestrator API listening on port ${port}`);

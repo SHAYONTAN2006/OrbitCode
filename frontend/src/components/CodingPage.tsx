@@ -6,7 +6,7 @@ import styled from '@emotion/styled';
 import { Output } from './Output';
 import { TerminalComponent as Terminal } from './Terminal';
 import { Socket, io } from 'socket.io-client';
-import { EXECUTION_ENGINE_URI } from '../config';
+import { EXECUTION_GATEWAY_URL } from '../config';
 
 const Container = styled.div`
   display: flex;
@@ -37,24 +37,25 @@ const RightPanel = styled.div`
   width: 40%;
 `;
 
-function useSocket(replId: string, runnerUri: string) {
+function useSocket(replId: string) {
     const [socket, setSocket] = useState<Socket | null>(null);
     const [connectionError, setConnectionError] = useState<string | null>(null);
 
     useEffect(() => {
-        console.log(`Connecting to runner at: ${runnerUri}`);
+        console.log(`Connecting to execution gateway for repl: ${replId}`);
         setConnectionError(null);
-        // Connect directly to the specific container assigned to this user
-        const newSocket = io(`${runnerUri}`);
+        const newSocket = io(EXECUTION_GATEWAY_URL, {
+            query: { replId }
+        });
         newSocket.on('connect_error', () => {
-            setConnectionError(`Unable to connect to runner at ${runnerUri}`);
+            setConnectionError('Unable to connect to execution gateway');
         });
         setSocket(newSocket);
 
         return () => {
             newSocket.disconnect();
         };
-    }, [replId, runnerUri]);
+    }, [replId]);
 
     return { socket, connectionError };
 }
@@ -63,22 +64,8 @@ export const CodingPage = () => {
     const [searchParams] = useSearchParams();
     const replId = searchParams.get('replId') ?? '';
     
-    const taskInfo = searchParams.get('taskInfo');
-    let runnerUri = EXECUTION_ENGINE_URI;
-
-    if (taskInfo) {
-        try {
-            const parsedTaskInfo: unknown = JSON.parse(taskInfo);
-            if (typeof parsedTaskInfo === 'string') {
-                runnerUri = parsedTaskInfo;
-            }
-        } catch {
-            console.error('Invalid runner task information in URL');
-        }
-    }
-    
     const [loaded, setLoaded] = useState(false);
-    const { socket, connectionError } = useSocket(replId, runnerUri);
+    const { socket, connectionError } = useSocket(replId);
     const [fileStructure, setFileStructure] = useState<RemoteFile[]>([]);
     const [selectedFile, setSelectedFile] = useState<File | undefined>(undefined);
     const [output, setOutput] = useState("");
