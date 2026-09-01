@@ -62,7 +62,7 @@ export const Landing = () => {
 
     return (
       <Container>
-        <Title>Lepl lit</Title>
+        <Title>OrbitCode</Title>
         <StyledInput
           onChange={(e) => setReplId(e.target.value)}
           type="text"

@@ -17,7 +17,7 @@ Orchestrator (Express, port 3000)
   v                  v
 S3 bucket       ECS Fargate runner
                      ^
-                     | private runner connection
+                     | gateway-to-runner connection
                      |
 Execution Gateway (port 4000)
                      ^
@@ -34,6 +34,8 @@ Execution Gateway (port 4000)
 - The editor loads the S3-backed file tree, fetches file contents, and uploads complete file changes.
 - The terminal uses xterm in the browser and forwards input/output through Socket.IO.
 - The Run button asks the runner to execute the selected `.js` or `.py` file and displays stdout/stderr.
+
+The browser never connects directly to a runner. It connects to the stable gateway at `http://localhost:4000`, passing the `replId` in the Socket.IO handshake. The gateway resolves the runner through the orchestrator and proxies the existing events.
 
 ### Backend
 
@@ -96,6 +98,11 @@ Do not commit AWS credentials. If credentials have ever been pushed, revoke and 
 
 ## Local development
 
+There are two supported testing modes:
+
+- **AWS runner mode:** run the frontend, orchestrator, and execution gateway locally. The orchestrator starts the runner from the active ECS task definition and registers its address. Do not start `backend/runner` separately.
+- **Local runner mode:** run the frontend, orchestrator, execution gateway, and a manually started runner. Set `LOCAL_RUNNER_URL` in the orchestrator environment and use the same `REPL_ID` when testing.
+
 Install and start the orchestrator:
 
 ```bash
@@ -112,7 +119,7 @@ npm install
 npm run dev
 ```
 
-For local integration testing, start a runner in a fourth terminal:
+For local-runner mode only, start a runner in a fourth terminal:
 
 ```bash
 cd backend/runner
@@ -184,6 +191,18 @@ npm run build
 The gateway is the only Socket.IO endpoint used by the browser. It accepts `replId` in the connection query, asks the orchestrator for the matching runner URL, and forwards the existing file, terminal, and execution events. Runner addresses never appear in the frontend configuration or project response.
 
 The local registry is an in-memory map owned by the orchestrator. The gateway accesses it through the orchestrator's internal HTTP endpoint. In AWS, replace this endpoint or its backing store with Redis, DynamoDB, or ECS service discovery without changing the browser protocol.
+
+### Service endpoints
+
+| Service | Local endpoint | Browser access |
+| --- | --- | --- |
+| Frontend | `http://localhost:5173` | Directly opened by the user |
+| Orchestrator | `http://localhost:3000` | Frontend HTTP requests only |
+| Execution Gateway | `http://localhost:4000` | Browser Socket.IO endpoint |
+| Local Runner | `http://localhost:5001` | Gateway only |
+| ECS Runner | Address registered by the orchestrator | Gateway only |
+
+For AWS runner mode, the browser does not need the ECS task IP, task ARN, ENI, or runner port. The current prototype still returns a public ECS runner address internally to the gateway; deploy the gateway inside the VPC and replace this with private networking or service discovery before production.
 
 ## Known limitations
 
