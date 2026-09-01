@@ -202,6 +202,52 @@ The local registry is an in-memory map owned by the orchestrator. The gateway ac
 | Local Runner | `http://localhost:5001` | Gateway only |
 | ECS Runner | Address registered by the orchestrator | Gateway only |
 
+### Private Subnet Deployment (S3 VPC Endpoint)
+
+For secure S3 access without internet egress, deploy ECS runners in a private subnet with an S3 VPC endpoint:
+
+**Architecture:**
+```
+Orchestrator (public/admin)
+  ↓
+ECS Cluster (private subnet)
+  ├─ Runner 1 (private IP)
+  ├─ Runner 2 (private IP)
+  └─ S3 VPC Endpoint ─→ S3 Bucket
+```
+
+**Setup steps:**
+
+1. **Create S3 VPC Endpoint:**
+   - Type: Gateway (not Interface)
+   - VPC: Your ECS VPC
+   - Route tables: Private subnet route tables
+   - Policy: Allow S3 actions on your bucket
+
+2. **Configure security groups:**
+   - Runner SG: Allow outbound port 443 (for S3 endpoint + ECR pulls)
+   - Runner SG: Allow inbound port 8080 from Gateway SG (if gateway in same VPC)
+
+3. **Update `.env`:**
+   - `ECS_SUBNETS=subnet-private-1,subnet-private-2` (private subnets only)
+   - No changes needed to IAM—Task Role still handles S3 authentication
+
+4. **Deploy Gateway in same VPC:**
+   - Gateway must be in the same VPC to reach runners via private IP
+   - Deploy as ECS service or EC2 instance in the private subnet
+   - Or use a load balancer in public subnet to expose gateway to browsers
+
+**Benefits:**
+- ✅ Runners have no public IPs (reduced attack surface)
+- ✅ No internet gateway required for S3 access
+- ✅ No data charges for S3 VPC endpoint traffic
+- ✅ Task Role provides temporary credentials (no static keys)
+
+**Networking notes:**
+- Orchestrator can reach private runners via internal registry (running locally or in same VPC)
+- Gateway must have network path to runners (same VPC recommended)
+- ECR image pulls still need internet (use VPC endpoint for ECR, or NAT gateway in public subnet)
+
 For AWS runner mode, the browser does not need the ECS task IP, task ARN, ENI, or runner port. The current prototype still returns a public ECS runner address internally to the gateway; deploy the gateway inside the VPC and replace this with private networking or service discovery before production.
 
 ## Known limitations
@@ -214,7 +260,6 @@ For AWS runner mode, the browser does not need the ECS task IP, task ARN, ENI, o
 - User workspace dependencies are not installed automatically; the Run handler executes JavaScript with Node or Python files with Python 3.
 - The runner currently exposes port `8080` for Socket.IO and runner HTTP health checks. A separate application preview port and ECS/network mapping are required for web previews.
 - The gateway currently resolves runner URLs through the orchestrator's in-memory registry; use a shared durable registry when running multiple orchestrator instances.
-- The current ECS implementation still obtains a public runner IP. Production should place runners privately behind the gateway or service discovery.
 - ECS tasks shut down after five minutes without an active socket connection.
 - The S3 copy operation is intended to support continuation tokens, but the recursive call currently passes the original token.
 

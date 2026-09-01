@@ -81,7 +81,9 @@ export async function startRunnerContainer(replId: string): Promise<string> {
                 awsvpcConfiguration: {
                     subnets: process.env.ECS_SUBNETS?.split(",") || [],
                     securityGroups: process.env.ECS_SECURITY_GROUPS?.split(",") || [],
-                    assignPublicIp: "ENABLED" // Required for Fargate to pull images from ECR if no NAT gateway
+                    // With S3 VPC Endpoint + private subnet, no public IP needed
+                    // Gateway connects via private IP within VPC
+                    assignPublicIp: "DISABLED"
                 }
             },
             overrides: {
@@ -132,22 +134,32 @@ async function waitForTaskIp(taskArn: string): Promise<string> {
 
         if (task?.lastStatus === "RUNNING") {
             const eniAttachment = task.attachments?.find(a => a.type === "ElasticNetworkInterface");
-            const publicIpDetail = eniAttachment?.details?.find(d => d.name === "networkInterfaceId");
+            const eniIdDetail = eniAttachment?.details?.find(d => d.name === "networkInterfaceId");
+            const privateIpDetail = eniAttachment?.details?.find(d => d.name === "privateIpv4Address");
 
-            if (!publicIpDetail?.value) {
+            if (!eniIdDetail?.value) {
                 throw new Error("Runner task is RUNNING but has no network interface yet");
             }
 
-            const networkInterfaces = await ec2.describeNetworkInterfaces({
-                NetworkInterfaceIds: [publicIpDetail.value]
-            }).promise();
-            const publicIp = networkInterfaces.NetworkInterfaces?.[0]?.Association?.PublicIp;
-
-            if (!publicIp) {
-                throw new Error("Runner task is RUNNING but has no public IP");
+            // If private IP is in attachment details, use it directly (more reliable)
+            if (privateIpDetail?.value) {
+                const privateIp = privateIpDetail.value;
+                console.log(`Runner task acquired private IP: ${privateIp}`);
+                return `http://${privateIp}:${process.env.RUNNER_PORT || "8080"}`;
             }
 
-            return `http://${publicIp}:${process.env.RUNNER_PORT || "8080"}`;
+            // Fallback: query ENI for private IP
+            const networkInterfaces = await ec2.describeNetworkInterfaces({
+                NetworkInterfaceIds: [eniIdDetail.value]
+            }).promise();
+            const privateIp = networkInterfaces.NetworkInterfaces?.[0]?.PrivateIpAddress;
+
+            if (!privateIp) {
+                throw new Error("Runner task is RUNNING but has no private IP");
+            }
+
+            console.log(`Runner task acquired private IP: ${privateIp}`);
+            return `http://${privateIp}:${process.env.RUNNER_PORT || "8080"}`;
         }
 
         if (task?.lastStatus === "STOPPED") {
