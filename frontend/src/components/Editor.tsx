@@ -11,12 +11,14 @@ export const Editor = ({
     files,
     onSelect,
     selectedFile,
-    socket
+    socket,
+    onFileCreated,
 }: {
     files: RemoteFile[];
     onSelect: (file: File) => void;
     selectedFile: File | undefined;
-    socket: Socket;
+    socket: Socket | null;
+    onFileCreated?: (file: RemoteFile) => void;
 }) => {
   const rootDir = useMemo(() => {
     return buildFileTree(files);
@@ -30,10 +32,28 @@ export const Editor = ({
     }
   }, [selectedFile, rootDir, onSelect])
 
+  const handleCreateFile = (name: string) => {
+    // Determine parent path (root if nothing selected, else use selected file's parent)
+    const parentPath = selectedFile ? selectedFile.path.substring(0, selectedFile.path.lastIndexOf('/')) : '';
+    const filePath = parentPath ? `${parentPath}/${name}` : name;
+    // Emit to runner: save an empty file at this path
+    socket?.emit('updateContent', { path: filePath, content: '' });
+    // Optimistically add to the file tree for the UI
+    onFileCreated?.({ name, path: filePath, type: 'file' });
+  };
+
+  const handleCreateFolder = (name: string) => {
+    const parentPath = selectedFile ? selectedFile.path.substring(0, selectedFile.path.lastIndexOf('/')) : '';
+    const folderPath = parentPath ? `${parentPath}/${name}` : name;
+    // Emit a .gitkeep file inside to persist the folder
+    socket?.emit('updateContent', { path: `${folderPath}/.gitkeep`, content: '' });
+    onFileCreated?.({ name, path: folderPath, type: 'dir' });
+  };
+
   return (
     <div>
       <Main>
-        <Sidebar>
+        <Sidebar onCreateFile={handleCreateFile} onCreateFolder={handleCreateFolder}>
           <FileTree
             rootDir={rootDir}
             selectedFile={selectedFile}
@@ -48,4 +68,4 @@ export const Editor = ({
 
 const Main = styled.main`
   display: flex;
-`;
+`;

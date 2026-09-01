@@ -117,7 +117,19 @@ export const CodingPage = () => {
             </ButtonContainer>
             <Workspace>
                 <LeftPanel>
-                    <Editor socket={socket} selectedFile={selectedFile} onSelect={onSelect} files={fileStructure} />
+                    <Editor
+                        socket={socket}
+                        selectedFile={selectedFile}
+                        onSelect={onSelect}
+                        files={fileStructure}
+                        onFileCreated={(newEntry) => {
+                            setFileStructure(prev => {
+                                // Avoid duplicates
+                                if (prev.find(f => f.path === newEntry.path)) return prev;
+                                return [...prev, newEntry];
+                            });
+                        }}
+                    />
                 </LeftPanel>
                 <RightPanel>
                     {output && <Output output={output} />}
