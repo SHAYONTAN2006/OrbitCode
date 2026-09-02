@@ -3,22 +3,14 @@ import { EC2 } from "aws-sdk";
 import { ECSClient, RunTaskCommand, DescribeTasksCommand } from "@aws-sdk/client-ecs";
 
 const s3 = new S3({
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
     region: process.env.AWS_REGION || "us-east-1"
 });
 
 const ecsClient = new ECSClient({
-    region: process.env.AWS_REGION || "us-east-1",
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ""
-    }
+    region: process.env.AWS_REGION || "us-east-1"
 });
 
 const ec2 = new EC2({
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
     region: process.env.AWS_REGION || "us-east-1"
 });
 

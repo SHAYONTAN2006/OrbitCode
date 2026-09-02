@@ -11,6 +11,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get("/health", (_req, res) => {
+    res.json({ status: "ok" });
+});
+
 app.post("/project", async (req, res) => {
     // In a real app, hit a database to ensure this replId isn't taken
     const { replId, language } = req.body;
