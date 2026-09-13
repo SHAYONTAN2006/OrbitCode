@@ -10,47 +10,53 @@ export const fetchS3Folder = async (
     key: string,
     localPath: string
 ): Promise<void> => {
+    const bucket = process.env.S3_BUCKET ?? "";
+    const prefix = key.replace(/\/+$/, "") + "/";
+
     try {
-        const params = {
-            Bucket: process.env.S3_BUCKET ?? "",
-            Prefix: key
-        };
+        let continuationToken: string | undefined;
 
-        const response = await s3.listObjectsV2(params).promise();
+        do {
+            const response = await s3.listObjectsV2({
+                Bucket: bucket,
+                Prefix: prefix,
+                ContinuationToken: continuationToken
+            }).promise();
 
-        if (response.Contents) {
-            await Promise.all(
-                response.Contents.map(async (file) => {
-                    const fileKey = file.Key;
+            await Promise.all((response.Contents ?? []).map(async (file) => {
+                const fileKey = file.Key;
 
-                    // Skip S3 folder/directory markers
-                    if (fileKey && !fileKey.endsWith("/")) {
-                        const getObjectParams = {
-                            Bucket: process.env.S3_BUCKET ?? "",
-                            Key: fileKey
-                        };
+                if (!fileKey) {
+                    return;
+                }
 
-                        const data = await s3
-                            .getObject(getObjectParams)
-                            .promise();
+                if (fileKey.endsWith("/")) {
+                    console.log(`Skipping S3 directory marker: ${fileKey}`);
+                    return;
+                }
 
-                        if (data.Body) {
-                            const fileData = data.Body as Buffer;
-                            const filePath =
-                                `${localPath}/${fileKey.replace(key, "")}`;
+                const relativePath = fileKey.slice(prefix.length);
+                const filePath = path.join(localPath, relativePath);
+                const data = await s3.getObject({
+                    Bucket: bucket,
+                    Key: fileKey
+                }).promise();
 
-                            await writeFile(filePath, fileData);
+                if (data.Body) {
+                    await writeFile(filePath, data.Body as Buffer);
+                    console.log(`Downloaded ${fileKey} to ${filePath}`);
+                }
+            }));
 
-                            console.log(
-                                `Downloaded ${fileKey} to ${filePath}`
-                            );
-                        }
-                    }
-                })
-            );
-        }
+            if (response.IsTruncated && !response.NextContinuationToken) {
+                throw new Error("S3 pagination did not return a continuation token");
+            }
+
+            continuationToken = response.NextContinuationToken;
+        } while (continuationToken);
     } catch (error) {
         console.error("Error fetching folder:", error);
+        throw error;
     }
 };
 
