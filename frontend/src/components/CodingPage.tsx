@@ -45,6 +45,7 @@ function useSocket(replId: string) {
         console.log(`Connecting to execution gateway for repl: ${replId}`);
         setConnectionError(null);
         const newSocket = io(EXECUTION_GATEWAY_URL, {
+            path: "/execute/socket.io",
             query: { replId }
         });
         newSocket.on('connect_error', () => {
