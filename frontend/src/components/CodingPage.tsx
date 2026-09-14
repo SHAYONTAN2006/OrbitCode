@@ -46,6 +46,7 @@ function useSocket(replId: string) {
         setConnectionError(null);
         const newSocket = io(EXECUTION_GATEWAY_URL, {
             path: "/execute/socket.io",
+            transports: ["polling"],
             query: { replId }
         });
         newSocket.on('connect_error', () => {
