@@ -4,8 +4,14 @@ import { Terminal } from "xterm";
 import { FitAddon } from 'xterm-addon-fit';
 const fitAddon = new FitAddon();
 
-function ab2str(buf: string) {
-    return String.fromCharCode.apply(null, new Uint8Array(buf));
+type TerminalData = string | ArrayBuffer | Uint8Array;
+
+function ab2str(data: TerminalData): string {
+    if (typeof data === "string") {
+        return data;
+    }
+
+    return new TextDecoder().decode(data);
 }
 
 const OPTIONS_TERM = {
@@ -18,7 +24,7 @@ const OPTIONS_TERM = {
     }
 };
 export const TerminalComponent = ({ socket }: {socket: Socket}) => {
-    const terminalRef = useRef();
+    const terminalRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
         if (!terminalRef || !terminalRef.current || !socket) {
@@ -31,12 +37,8 @@ export const TerminalComponent = ({ socket }: {socket: Socket}) => {
         term.loadAddon(fitAddon);
         term.open(terminalRef.current);
         fitAddon.fit();
-        function terminalHandler({ data }) {
-            if (data instanceof ArrayBuffer) {
-                console.error(data);
-                console.log(ab2str(data))
-                term.write(ab2str(data))
-            }
+        function terminalHandler({ data }: { data: TerminalData }) {
+            term.write(ab2str(data));
         }
         term.onData((data) => {
             console.log(data);
@@ -52,7 +54,7 @@ export const TerminalComponent = ({ socket }: {socket: Socket}) => {
         return () => {
             socket.off("terminal")
         }
-    }, [terminalRef]);
+    }, [socket]);
 
     return <div style={{width: "40vw", height: "400px", textAlign: "left"}} ref={terminalRef}>
         

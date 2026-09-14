@@ -1,4 +1,5 @@
 import Editor from "@monaco-editor/react";
+import { useRef } from "react";
 import { File } from "../utils/file-manager";
 import { Socket } from "socket.io-client";
 
@@ -16,15 +17,7 @@ export const Code = ({ selectedFile, socket }: { selectedFile: File | undefined,
   else if (language === "py" )
     language = "python"
 
-    function debounce(func: (value: string) => void, wait: number) {
-      let timeout: number;
-      return (value: string) => {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => {
-          func(value);
-        }, wait);
-      };
-    }
+  const debounceTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   return (
       <Editor
@@ -32,11 +25,21 @@ export const Code = ({ selectedFile, socket }: { selectedFile: File | undefined,
         language={language}
         value={code}
         theme="vs-dark"
-        onChange={debounce((value) => {
-          // Should send diffs, for now sending the whole file
-          // PR and win a bounty!
-          socket.emit("updateContent", { path: selectedFile.path, content: value });
-        }, 500)}
+        onChange={(value) => {
+          if (value === undefined) {
+            return;
+          }
+
+          if (debounceTimeout.current !== undefined) {
+            clearTimeout(debounceTimeout.current);
+          }
+
+          debounceTimeout.current = setTimeout(() => {
+            // Should send diffs, for now sending the whole file
+            // PR and win a bounty!
+            socket.emit("updateContent", { path: selectedFile.path, content: value });
+          }, 500);
+        }}
       />
   )
 }

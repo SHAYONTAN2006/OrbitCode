@@ -101,7 +101,7 @@ export const CodingPage = () => {
         }
     };
     
-    if (!loaded) {
+    if (!loaded || !socket) {
         return connectionError || "Loading...";
     }
 

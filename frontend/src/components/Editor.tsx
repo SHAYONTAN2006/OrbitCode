@@ -17,7 +17,7 @@ export const Editor = ({
     files: RemoteFile[];
     onSelect: (file: File) => void;
     selectedFile: File | undefined;
-    socket: Socket | null;
+    socket: Socket;
     onFileCreated?: (file: RemoteFile) => void;
 }) => {
   const rootDir = useMemo(() => {
@@ -68,4 +68,4 @@ export const Editor = ({
 
 const Main = styled.main`
   display: flex;
-`;
+`;
