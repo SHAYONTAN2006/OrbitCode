@@ -1,0 +1,11 @@
+aws_region  = "us-east-1"
+project_name = "orbitcode"
+environment  = "dev"
+
+# Use a globally unique bucket name.
+workspace_bucket_name = "replace-with-a-unique-orbitcode-bucket-name"
+
+# Replace these with your actual ECR image URIs.
+orchestrator_image = "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/orbitcode-orchestrator:latest"
+gateway_image      = "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/orbitcode-gateway:latest"
+runner_image       = "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/orbitcode-runner:latest"
